@@ -32,6 +32,7 @@ class NaiveRAG(RAGAgent):
         top_k: int = 10,
         route_collection: bool = True,
         text_window_splitter: bool = True,
+        enable_web_search: bool = False,
         **kwargs,
     ):
         """
@@ -41,6 +42,10 @@ class NaiveRAG(RAGAgent):
             llm: The language model to use for generating answers.
             embedding_model: The embedding model to use for query embedding.
             vector_db: The vector database to search for relevant documents.
+            top_k: The maximum number of results to return.
+            route_collection: Whether to use a collection router for search.
+            text_window_splitter: Whether to use text_window splitter.
+            enable_web_search: Whether to enable web search using Tavily.
             **kwargs: Additional keyword arguments for customization.
         """
         self.llm = llm
@@ -48,6 +53,7 @@ class NaiveRAG(RAGAgent):
         self.vector_db = vector_db
         self.top_k = top_k
         self.route_collection = route_collection
+        self.enable_web_search = enable_web_search
         if self.route_collection:
             self.collection_router = CollectionRouter(
                 llm=self.llm, vector_db=self.vector_db, dim=embedding_model.dimension
@@ -72,6 +78,9 @@ class NaiveRAG(RAGAgent):
                 - Additional information about the retrieval process
         """
         consume_tokens = 0
+        all_retrieved_results = []
+        
+        # Search from vector database
         if self.route_collection:
             selected_collections, n_token_route = self.collection_router.invoke(
                 query=query, dim=self.embedding_model.dimension
@@ -80,7 +89,7 @@ class NaiveRAG(RAGAgent):
             selected_collections = self.collection_router.all_collections
             n_token_route = 0
         consume_tokens += n_token_route
-        all_retrieved_results = []
+        
         for collection in selected_collections:
             retrieval_res = self.vector_db.search_data(
                 collection=collection,
@@ -89,6 +98,18 @@ class NaiveRAG(RAGAgent):
                 query_text=query,
             )
             all_retrieved_results.extend(retrieval_res)
+        
+        # Search from web if enabled
+        if self.enable_web_search:
+            try:
+                log.color_print(f"<search> Web search [{query}]...  </search>\n")
+                from deepsearcher.online_query import web_search_query
+                web_results = web_search_query(query, max_results=3, search_depth="basic")
+                all_retrieved_results.extend(web_results)
+                log.color_print(f"<search> Found {len(web_results)} web search results  </search>\n")
+            except Exception as e:
+                log.color_print(f"<search> Web search failed: {e}  </search>\n")
+        
         all_retrieved_results = deduplicate_results(all_retrieved_results)
         return all_retrieved_results, consume_tokens, {}
 

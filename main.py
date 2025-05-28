@@ -80,6 +80,11 @@ def load_files(
         description="Optional batch size for the collection.",
         examples=[256],
     ),
+    enable_web_search: bool = Body(
+        False,
+        description="Enable web search using Tavily crawler for enhanced results.",
+        examples=[True, False],
+    ),
 ):
     """
     Load files into the vector database.
@@ -89,6 +94,7 @@ def load_files(
         collection_name (str, optional): Name for the collection. Defaults to None.
         collection_description (str, optional): Description for the collection. Defaults to None.
         batch_size (int, optional): Batch size for processing. Defaults to None.
+        enable_web_search (bool, optional): Enable web search using Tavily crawler. Defaults to False.
 
     Returns:
         dict: A dictionary containing a success message.
@@ -97,13 +103,21 @@ def load_files(
         HTTPException: If loading files fails.
     """
     try:
+        # Configure web search if enabled
+        if enable_web_search:
+            config.set_provider_config("web_crawler", "TavilyCrawler", {})
+            init_config(config)
+        
         load_from_local_files(
             paths_or_directory=paths,
             collection_name=collection_name,
             collection_description=collection_description,
             batch_size=batch_size,
         )
-        return {"message": "Files loaded successfully."}
+        return {
+            "message": "Files loaded successfully.",
+            "web_search_enabled": enable_web_search
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -130,6 +144,11 @@ def load_website(
         description="Optional batch size for the collection.",
         examples=[256],
     ),
+    enable_web_search: bool = Body(
+        False,
+        description="Enable web search using Tavily crawler for enhanced crawling.",
+        examples=[True, False],
+    ),
 ):
     """
     Load website content into the vector database.
@@ -139,6 +158,7 @@ def load_website(
         collection_name (str, optional): Name for the collection. Defaults to None.
         collection_description (str, optional): Description for the collection. Defaults to None.
         batch_size (int, optional): Batch size for processing. Defaults to None.
+        enable_web_search (bool, optional): Enable web search using Tavily crawler. Defaults to False.
 
     Returns:
         dict: A dictionary containing a success message.
@@ -147,13 +167,21 @@ def load_website(
         HTTPException: If loading website content fails.
     """
     try:
+        # Configure web search if enabled
+        if enable_web_search:
+            config.set_provider_config("web_crawler", "TavilyCrawler", {})
+            init_config(config)
+        
         load_from_website(
             urls=urls,
             collection_name=collection_name,
             collection_description=collection_description,
             batch_size=batch_size,
         )
-        return {"message": "Website loaded successfully."}
+        return {
+            "message": "Website loaded successfully.",
+            "web_search_enabled": enable_web_search
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -171,6 +199,11 @@ def perform_query(
         ge=1,
         examples=[3],
     ),
+    enable_web_search: bool = Query(
+        False,
+        description="Enable web search using Tavily crawler for enhanced results.",
+        examples=[True, False],
+    ),
 ):
     """
     Perform a query against the loaded data.
@@ -178,6 +211,7 @@ def perform_query(
     Args:
         original_query (str): The user's question or query.
         max_iter (int, optional): Maximum number of iterations for reflection. Defaults to 3.
+        enable_web_search (bool, optional): Enable web search using Tavily crawler. Defaults to False.
 
     Returns:
         dict: A dictionary containing the query result and token consumption.
@@ -186,8 +220,21 @@ def perform_query(
         HTTPException: If the query fails.
     """
     try:
-        result_text, _, consume_token = query(original_query, max_iter)
-        return {"result": result_text, "consume_token": consume_token}
+        # Configure web search if enabled
+        if enable_web_search:
+            config.set_provider_config("web_crawler", "TavilyCrawler", {})
+            init_config(config)
+        
+        result_text, _, consume_token = query(
+            original_query, 
+            max_iter=max_iter, 
+            enable_web_search=enable_web_search
+        )
+        return {
+            "result": result_text, 
+            "consume_token": consume_token,
+            "web_search_enabled": enable_web_search
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -195,7 +242,16 @@ def perform_query(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FastAPI Server")
     parser.add_argument("--enable-cors", type=bool, default=False, help="Enable CORS support")
+    parser.add_argument("--enable-web-search", action="store_true", help="Enable web search by default")
     args = parser.parse_args()
+    
+    # Configure web search if enabled globally
+    if args.enable_web_search:
+        print("🌐 Web search enabled globally - configuring Tavily crawler...")
+        config.set_provider_config("web_crawler", "TavilyCrawler", {})
+        init_config(config)
+        print("✅ Tavily crawler configured successfully")
+    
     if args.enable_cors:
         app.add_middleware(
             CORSMiddleware,

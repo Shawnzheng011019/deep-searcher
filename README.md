@@ -102,7 +102,12 @@ docker-compose up -d
 docker-compose -f docker-compose.simple.yml up -d
 ```
 
-> **Note:** The first time you run `docker-compose up -d` (for either configuration), if the Docker image for the `deepsearcher` service doesn't exist locally, Docker Compose will build it automatically based on the `Dockerfile`. This process can take several minutes, and you might see a warning like `Image for service deepsearcher was built because it did not already exist`. This is normal and expected. 
+> **Note for Tavily web search:** To use the Tavily web search functionality, you can enable it with either Docker Compose configuration by:
+> 1. Get a Tavily API key from [https://tavily.com](https://tavily.com)
+> 2. Add `TAVILY_API_KEY=your_tavily_api_key_here` to your `.env` file
+> 3. The web search functionality will be available via API parameters or configuration
+
+> **Note:** The first time you run `docker-compose up -d` (for any configuration), if the Docker image for the `deepsearcher` service doesn't exist locally, Docker Compose will build it automatically based on the `Dockerfile`. This process can take several minutes, and you might see a warning like `Image for service deepsearcher was built because it did not already exist`. This is normal and expected. 
 > If you later modify the `Dockerfile` or application files that are part of the image (e.g., Python code), you should rebuild the image to apply your changes. You can do this by running `docker-compose build` before `up`, or by using `docker-compose up --build -d`.
 
 The DeepSearcher API will be available at `http://localhost:8000`.
@@ -135,6 +140,11 @@ Once DeepSearcher is running, you can access its API at `http://localhost:8000`.
   curl -X GET "http://localhost:8000/query/?original_query=What%20is%20Milvus%3F" -H "accept: application/json"
   ```
 
+- **Using `curl` with Tavily web search enabled:**
+  ```shell
+  curl -X GET "http://localhost:8000/query/?original_query=What%20are%20the%20latest%20features%20in%20Milvus%202024%3F&enable_web_search=true" -H "accept: application/json"
+  ```
+
 - **Using Python `requests` (example for the `/query/` endpoint):**
   ```python
   import requests
@@ -142,6 +152,24 @@ Once DeepSearcher is running, you can access its API at `http://localhost:8000`.
   params = {
       'original_query': 'What is Milvus?',
       'max_iter': 3  # Optional, defaults to 3
+  }
+  response = requests.get("http://localhost:8000/query/", params=params)
+
+  if response.status_code == 200:
+      print(response.json())
+  else:
+      print(f"Error: {response.status_code}")
+      print(response.text)
+  ```
+
+- **Using Python `requests` with Tavily web search:**
+  ```python
+  import requests
+
+  params = {
+      'original_query': 'What are the latest features in Milvus 2024?',
+      'max_iter': 3,
+      'enable_web_search': True  # Enable Tavily web search
   }
   response = requests.get("http://localhost:8000/query/", params=params)
 
@@ -180,6 +208,15 @@ load_from_website(urls=website_url)
 
 # Query
 result = query("Write a report about xxx.") # Your question here
+
+# (NEW) Query with web search enabled
+result_with_web_search = query("Write a report about xxx.", enable_web_search=True)
+
+# (NEW) Query with Tavily web search configured
+# Make sure you have TAVILY_API_KEY in your environment variables
+config.set_provider_config("web_crawler", "TavilyCrawler", {})
+init_config(config=config)
+result_with_tavily = query("Write a report about the latest developments in vector databases.", enable_web_search=True)
 ```
 ### Configuration Details:
 #### LLM Configuration
@@ -482,8 +519,32 @@ result = query("Write a report about xxx.") # Your question here
 
 #### Web Crawler Configuration
 <pre><code>config.set_provider_config("web_crawler", "(WebCrawlerName)", "(Arguments dict)")</code></pre>
-<p>The "WebCrawlerName" can be one of the following: ["FireCrawlCrawler", "Crawl4AICrawler", "JinaCrawler"]</p>
+<p>The "WebCrawlerName" can be one of the following: ["FireCrawlCrawler", "Crawl4AICrawler", "JinaCrawler", "TavilyCrawler", "DoclingCrawler"]</p>
 <p> The "Arguments dict" is a dictionary that contains the necessary arguments for the Web Crawler class.</p>
+
+<details>
+  <summary>Example (Tavily - Intelligent Web Search)</summary>
+    <p> Make sure you have prepared your Tavily API KEY as an env variable <code>TAVILY_API_KEY</code>. Get your free API key (1,000 credits/month) from <a href="https://app.tavily.com">Tavily</a>.</p>
+    <pre><code>config.set_provider_config("web_crawler", "TavilyCrawler", {})</code></pre>
+    <p><strong>Advanced Configuration Options:</strong></p>
+    <pre><code>config.set_provider_config("web_crawler", "TavilyCrawler", {
+    "search_depth": "advanced",  # "basic" or "advanced" search mode
+    "max_results": 10,           # Maximum number of search results
+    "include_domains": ["example.com", "trusted-site.org"],  # Optional: filter by domains
+    "exclude_domains": ["spam.com"],  # Optional: exclude specific domains
+    "include_answer": True,      # Include direct answer in results
+    "include_raw_content": False # Include raw HTML content
+})</code></pre>
+    <p><strong>Key Features:</strong></p>
+    <ul>
+      <li><strong>Real-time Search:</strong> Access the latest information from the web</li>
+      <li><strong>Multiple Search Modes:</strong> Basic search, advanced search, Q&A, and RAG context generation</li>
+      <li><strong>Domain Filtering:</strong> Include or exclude specific domains for targeted searches</li>
+      <li><strong>Direct Answers:</strong> Get immediate answers for simple questions</li>
+      <li><strong>Content Crawling:</strong> Extract full content from search results</li>
+    </ul>
+    <p>You need to install tavily-python before running, execute: <code>pip install tavily-python</code> or <code>pip install "deepsearcher[tavily]"</code>. More details about Tavily: https://docs.tavily.com/ </p>
+</details>
 
 <details>
   <summary>Example (FireCrawl)</summary>
@@ -639,9 +700,11 @@ nest_asyncio.apply()
   - PDF(with txt/md) loader
   - [Unstructured](https://unstructured.io/) (under development) (`UNSTRUCTURED_API_KEY` and `UNSTRUCTURED_URL` env variables required)
 - Web Crawler
+  - [Tavily](https://docs.tavily.com/) - AI-powered search engine for real-time web search (`TAVILY_API_KEY` env variable required)
   - [FireCrawl](https://docs.firecrawl.dev/introduction) (`FIRECRAWL_API_KEY` env variable required)
-  - [Jina Reader](https://jina.ai/reader/) (`JINA_API_TOKEN` env variable required)
+  - [Jina Reader](https://jina.ai/reader/) (`JINA_API_TOKEN` env variable required)  
   - [Crawl4AI](https://docs.crawl4ai.com/) (You should run command `crawl4ai-setup` for the first time)
+  - [Docling](https://docling-project.github.io/docling/) - Enterprise-grade document parsing
 
 ### 🔹 Vector Database Support
 - [Milvus](https://milvus.io/) and [Zilliz Cloud](https://www.zilliz.com/) (fully managed Milvus)
@@ -659,3 +722,313 @@ See the [Evaluation](./evaluation) directory for more details.
 - Provide RESTful API interface (**DONE**)
 
 We welcome contributions! Star & Fork the project and help us build a more powerful DeepSearcher! 🎯
+
+### 🌐 Web Search Integration
+
+DeepSearcher integrates with **Tavily**, a powerful AI-powered search engine designed for comprehensive and accurate information retrieval. This integration enables real-time web search capabilities, combining your private data with the latest online content for enhanced query responses.
+
+#### Prerequisites and Setup
+
+**1. Get Tavily API Key**
+- Sign up for a free account at [Tavily](https://app.tavily.com)
+- Navigate to your dashboard to obtain your API key
+- Free tier includes 1,000 API credits per month
+- No credit card required for the free tier
+
+**2. Environment Configuration**
+Set your Tavily API key as an environment variable:
+
+```bash
+# For Unix/Linux/macOS
+export TAVILY_API_KEY="your_tavily_api_key_here"
+
+# For Windows Command Prompt
+set TAVILY_API_KEY=your_tavily_api_key_here
+
+# For Windows PowerShell
+$env:TAVILY_API_KEY="your_tavily_api_key_here"
+```
+
+Alternatively, create a `.env` file in your project root:
+```env
+TAVILY_API_KEY=your_tavily_api_key_here
+```
+
+**3. Installation Requirements**
+Install the required Tavily package:
+```bash
+# Option 1: Install Tavily package directly
+pip install tavily-python
+
+# Option 2: Install DeepSearcher with Tavily support
+pip install "deepsearcher[tavily]"
+
+# Option 3: Install all optional dependencies
+pip install "deepsearcher[all]"
+```
+
+#### Configuration Methods
+
+**Method 1: Configuration via Python Code**
+```python
+from deepsearcher.configuration import Configuration, init_config
+
+config = Configuration()
+
+# Basic configuration
+config.set_provider_config("web_crawler", "TavilyCrawler", {})
+
+# Advanced configuration with custom settings
+config.set_provider_config("web_crawler", "TavilyCrawler", {
+    "search_depth": "advanced",              # "basic" or "advanced"
+    "max_results": 10,                       # Maximum search results (1-20)
+    "include_domains": [                     # Restrict search to specific domains
+        "arxiv.org", 
+        "scholar.google.com", 
+        "nature.com"
+    ],
+    "exclude_domains": [                     # Exclude specific domains
+        "spam.com", 
+        "unreliable-source.net"
+    ],
+    "include_answer": True,                  # Include AI-generated direct answer
+    "include_raw_content": False,            # Include raw HTML content
+    "include_images": True,                  # Include image results
+    "topic": "general"                       # Search topic: "general" or "news"
+})
+
+# Initialize configuration
+init_config(config)
+```
+
+**Method 2: Configuration via YAML File**
+Edit your `config.yaml` file:
+```yaml
+web_crawler:
+  provider: "TavilyCrawler"
+  config:
+    search_depth: "advanced"
+    max_results: 10
+    include_domains: ["arxiv.org", "scholar.google.com"]
+    exclude_domains: ["spam.com"]
+    include_answer: true
+    include_raw_content: false
+    include_images: true
+    topic: "general"
+```
+
+#### Usage Examples
+
+**1. CLI Mode with Web Search**
+```bash
+# Basic query with web search
+deepsearcher query "What are the latest developments in quantum computing?" --enable-web-search
+
+# Load and analyze web content
+deepsearcher load "https://example.com" --enable-web-search
+
+# Query with specific collection and web search
+deepsearcher query "AI trends 2024" --collection_name "tech_research" --enable-web-search
+
+# Specify maximum iterations and enable web search
+deepsearcher query "Machine learning applications" --max_iter 5 --enable-web-search
+```
+
+**2. FastAPI/Server Mode with Web Search**
+```bash
+# Start server with global web search enabled
+python main.py --enable-web-search
+
+# Start server with custom configuration
+python main.py --config-file custom_config.yaml --enable-web-search
+```
+
+**API Endpoints with Web Search:**
+```bash
+# GET request with web search enabled
+curl -X GET "http://localhost:8000/query/?original_query=What%20is%20the%20latest%20in%20AI%20research%3F&enable_web_search=true&max_iter=3"
+
+# POST request with web search
+curl -X POST "http://localhost:8000/query/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "original_query": "Quantum computing breakthroughs 2024",
+    "enable_web_search": true,
+    "max_iter": 3,
+    "collection_name": "research_data"
+  }'
+```
+
+**3. Python Script Integration**
+```python
+from deepsearcher.configuration import Configuration, init_config
+from deepsearcher.online_query import query, web_search_query
+
+# Setup configuration
+config = Configuration()
+config.set_provider_config("llm", "OpenAI", {"model": "gpt-4"})
+config.set_provider_config("embedding", "OpenAIEmbedding", {"model": "text-embedding-3-small"})
+config.set_provider_config("web_crawler", "TavilyCrawler", {"search_depth": "advanced"})
+init_config(config)
+
+# Method 1: Query with web search enabled
+result = query(
+    "What are the latest breakthroughs in machine learning?", 
+    enable_web_search=True,
+    max_iter=3
+)
+print(result)
+
+# Method 2: Direct web search query
+web_results = web_search_query(
+    "AI news 2024", 
+    max_results=5,
+    search_depth="advanced"
+)
+print(web_results)
+
+# Method 3: Combine local and web data
+result_combined = query(
+    "Compare recent AI developments with our internal research",
+    enable_web_search=True,
+    collection_name="internal_research"
+)
+```
+
+**4. Advanced Tavily Features**
+```python
+from deepsearcher.loader.web_crawler.tavily_crawler import TavilyCrawler
+
+# Initialize crawler with custom settings
+crawler = TavilyCrawler(
+    search_depth="advanced",
+    max_results=15,
+    include_domains=["arxiv.org", "nature.com", "science.org"],
+    exclude_domains=["wikipedia.org"],  # Exclude for more specialized results
+    include_answer=True
+)
+
+# Advanced search with domain filtering
+docs = crawler.search_and_crawl(
+    query="quantum computing quantum error correction 2024",
+    max_results=10,
+    search_depth="advanced"
+)
+
+# Direct Q&A search for quick answers
+answer = crawler.qna_search("What is quantum supremacy?")
+print(f"Direct Answer: {answer}")
+
+# Generate context for RAG applications
+context = crawler.get_search_context(
+    "applications of artificial intelligence in healthcare diagnostics"
+)
+
+# Search for news specifically
+news_results = crawler.search_and_crawl(
+    query="AI regulation legislation 2024",
+    topic="news",  # Focus on recent news
+    max_results=5
+)
+
+# Custom search with all parameters
+comprehensive_search = crawler.search_and_crawl(
+    query="sustainable energy storage solutions",
+    max_results=20,
+    search_depth="advanced",
+    include_domains=["ieee.org", "sciencedirect.com", "nature.com"],
+    include_answer=True,
+    include_images=True,
+    topic="general"
+)
+```
+
+#### Docker Integration with Tavily
+
+**Using Docker Compose with Tavily Support:**
+```bash
+# Make sure TAVILY_API_KEY is set in your .env file
+echo "TAVILY_API_KEY=your_api_key_here" >> .env
+
+# Option 1: Start with full Milvus stack
+docker-compose up -d
+
+# Option 2: Start with simple setup (DeepSearcher only)
+docker-compose -f docker-compose.simple.yml up -d
+
+# Test web search via API (works with both configurations)
+curl -X GET "http://localhost:8000/query/?original_query=Latest%20AI%20trends&enable_web_search=true"
+```
+
+**Configuration via Environment Variables:**
+```bash
+# Add to your .env file
+echo "TAVILY_API_KEY=your_api_key_here" >> .env
+
+# Optional: Configure default web search settings
+echo "WEB_SEARCH_ENABLED=true" >> .env
+echo "WEB_SEARCH_MAX_RESULTS=10" >> .env
+```
+
+#### Configuration Parameters Reference
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `search_depth` | string | "basic" | Search mode: "basic" (faster) or "advanced" (more comprehensive) |
+| `max_results` | integer | 5 | Maximum number of search results (1-20) |
+| `include_domains` | list | null | Whitelist of domains to search within |
+| `exclude_domains` | list | null | Blacklist of domains to exclude from search |
+| `include_answer` | boolean | true | Include AI-generated direct answer |
+| `include_raw_content` | boolean | false | Include raw HTML content in results |
+| `include_images` | boolean | false | Include image results in search |
+| `topic` | string | "general" | Search topic: "general" or "news" |
+
+#### Error Handling and Troubleshooting
+
+**Common Issues and Solutions:**
+
+1. **Missing API Key Error**
+   ```python
+   # Error: TAVILY_API_KEY environment variable not found
+   # Solution: Set the environment variable or check your .env file
+   import os
+   print("TAVILY_API_KEY:", os.getenv("TAVILY_API_KEY"))
+   ```
+
+2. **Rate Limiting**
+   ```python
+   # Tavily free tier has monthly limits
+   # Monitor your usage and implement retry logic
+   from deepsearcher.loader.web_crawler.tavily_crawler import TavilyCrawler
+   
+   try:
+       crawler = TavilyCrawler()
+       results = crawler.search_and_crawl("your query")
+   except Exception as e:
+       print(f"Search failed: {e}")
+       # Implement fallback or retry logic
+   ```
+
+3. **Network Connection Issues**
+   ```bash
+   # Test connection to Tavily API
+   curl -H "Authorization: Bearer your_api_key" "https://api.tavily.com/search"
+   ```
+
+#### Performance Optimization
+
+**Best Practices:**
+- Use `search_depth="basic"` for faster results when comprehensive search isn't needed
+- Limit `max_results` to reduce response time and API usage
+- Use domain filtering to focus searches on relevant sources
+- Cache frequently used search results to minimize API calls
+- Combine web search with local data efficiently by enabling web search only when necessary
+
+#### Integration Benefits
+
+- **Real-time Information**: Access the latest online content and breaking news
+- **Enhanced Accuracy**: Combine local knowledge base with current web data
+- **Intelligent Filtering**: Domain-specific search with relevance scoring
+- **Multiple Search Modes**: Basic search, advanced search, Q&A, and RAG context generation
+- **Seamless Integration**: Works with all DeepSearcher deployment modes (CLI, API, Docker)
+- **Scalable Architecture**: Efficient handling of concurrent web search requests

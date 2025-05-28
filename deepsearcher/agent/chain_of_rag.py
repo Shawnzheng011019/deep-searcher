@@ -94,6 +94,7 @@ class ChainOfRAG(RAGAgent):
         early_stopping: bool = False,
         route_collection: bool = True,
         text_window_splitter: bool = True,
+        enable_web_search: bool = False,
         **kwargs,
     ):
         """
@@ -107,6 +108,7 @@ class ChainOfRAG(RAGAgent):
             early_stopping (bool, optional): Whether to use early stopping. Defaults to False.
             route_collection (bool, optional): Whether to route the query to specific collections. Defaults to True.
             text_window_splitter (bool, optional): Whether use text_window splitter. Defaults to True.
+            enable_web_search (bool, optional): Whether to enable web search using Tavily. Defaults to False.
         """
         self.llm = llm
         self.embedding_model = embedding_model
@@ -114,6 +116,7 @@ class ChainOfRAG(RAGAgent):
         self.max_iter = max_iter
         self.early_stopping = early_stopping
         self.route_collection = route_collection
+        self.enable_web_search = enable_web_search
         self.collection_router = CollectionRouter(
             llm=self.llm, vector_db=self.vector_db, dim=embedding_model.dimension
         )
@@ -135,6 +138,9 @@ class ChainOfRAG(RAGAgent):
 
     def _retrieve_and_answer(self, query: str) -> Tuple[str, List[RetrievalResult], int]:
         consume_tokens = 0
+        all_retrieved_results = []
+        
+        # Search from vector database
         if self.route_collection:
             selected_collections, n_token_route = self.collection_router.invoke(
                 query=query, dim=self.embedding_model.dimension
@@ -143,7 +149,7 @@ class ChainOfRAG(RAGAgent):
             selected_collections = self.collection_router.all_collections
             n_token_route = 0
         consume_tokens += n_token_route
-        all_retrieved_results = []
+        
         for collection in selected_collections:
             log.color_print(f"<search> Search [{query}] in [{collection}]...  </search>\n")
             query_vector = self.embedding_model.embed_query(query)
@@ -151,6 +157,18 @@ class ChainOfRAG(RAGAgent):
                 collection=collection, vector=query_vector, query_text=query
             )
             all_retrieved_results.extend(retrieved_results)
+        
+        # Search from web if enabled
+        if self.enable_web_search:
+            try:
+                log.color_print(f"<search> Web search [{query}]...  </search>\n")
+                from deepsearcher.online_query import web_search_query
+                web_results = web_search_query(query, max_results=3, search_depth="basic")
+                all_retrieved_results.extend(web_results)
+                log.color_print(f"<search> Found {len(web_results)} web search results  </search>\n")
+            except Exception as e:
+                log.color_print(f"<search> Web search failed: {e}  </search>\n")
+        
         all_retrieved_results = deduplicate_results(all_retrieved_results)
         chat_response = self.llm.chat(
             [

@@ -118,8 +118,12 @@ provide_settings:
 
 
   web_crawler:
-    provider: "FireCrawlCrawler"
+    # provider: "FireCrawlCrawler"
+    # config: {}
+
+    provider: "TavilyCrawler"
     config: {}
+
 
     # provider: "Crawl4AICrawler"
     # config: # Uncomment to custom browser configuration for Crawl4AI

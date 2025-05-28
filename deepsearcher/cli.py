@@ -29,7 +29,7 @@ def main():
     if "--query" in sys.argv or "--load" in sys.argv:
         print("\033[91m[Deprecated]\033[0m The use of '--query' and '--load' is deprecated.")
         print("Please use:")
-        print("  deepsearcher query <your_query> --max_iter 3")
+        print("  deepsearcher query <your_query> --max_iter 3 --enable-web-search")
         print(
             "  deepsearcher load <your_local_path_or_url> --collection_name <your_collection_name> --collection_desc <your_collection_description>"
         )
@@ -49,6 +49,11 @@ def main():
         type=int,
         default=3,
         help="Max iterations of reflection. Default is 3.",
+    )
+    query_parser.add_argument(
+        "--enable-web-search",
+        action="store_true",
+        help="Enable web search using Tavily crawler for enhanced results.",
     )
 
     ## Arguments of loading
@@ -85,10 +90,27 @@ def main():
         default=False,
         help="If you want to drop origin collection and create a new collection on every load, set to True",
     )
+    load_parser.add_argument(
+        "--enable-web-search",
+        action="store_true",
+        help="Enable web search using Tavily crawler for enhanced crawling.",
+    )
 
     args = parser.parse_args()
+    
+    # Configure web search if enabled
+    if hasattr(args, 'enable_web_search') and args.enable_web_search:
+        log.color_print("🌐 Web search enabled - configuring Tavily crawler...")
+        config.set_provider_config("web_crawler", "TavilyCrawler", {})
+        init_config(config=config)
+        log.color_print("✅ Web crawler configured successfully")
+    
     if args.subcommand == "query":
-        final_answer, refs, consumed_tokens = query(args.query, max_iter=args.max_iter)
+        final_answer, refs, consumed_tokens = query(
+            args.query, 
+            max_iter=args.max_iter, 
+            enable_web_search=getattr(args, 'enable_web_search', False)
+        )
         log.color_print("\n==== FINAL ANSWER====\n")
         log.color_print(final_answer)
         log.color_print("\n### References\n")

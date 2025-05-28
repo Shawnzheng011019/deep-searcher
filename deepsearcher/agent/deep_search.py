@@ -84,6 +84,7 @@ class DeepSearch(RAGAgent):
         max_iter: int = 3,
         route_collection: bool = True,
         text_window_splitter: bool = True,
+        enable_web_search: bool = False,
         **kwargs,
     ):
         """
@@ -96,6 +97,7 @@ class DeepSearch(RAGAgent):
             max_iter: The maximum number of iterations for the search process.
             route_collection: Whether to use a collection router for search.
             text_window_splitter: Whether to use text_window splitter.
+            enable_web_search: Whether to enable web search using Tavily.
             **kwargs: Additional keyword arguments for customization.
         """
         self.llm = llm
@@ -103,6 +105,7 @@ class DeepSearch(RAGAgent):
         self.vector_db = vector_db
         self.max_iter = max_iter
         self.route_collection = route_collection
+        self.enable_web_search = enable_web_search
         self.collection_router = CollectionRouter(
             llm=self.llm, vector_db=self.vector_db, dim=embedding_model.dimension
         )
@@ -117,8 +120,11 @@ class DeepSearch(RAGAgent):
         response_content = self.llm.remove_think(chat_response.content)
         return self.llm.literal_eval(response_content), chat_response.total_tokens
 
-    async def _search_chunks_from_vectordb(self, query: str, sub_queries: List[str]):
+    async def _search_chunks(self, query: str, sub_queries: List[str]):
         consume_tokens = 0
+        all_retrieved_results = []
+        
+        # Search from vector database
         if self.route_collection:
             selected_collections, n_token_route = self.collection_router.invoke(
                 query=query, dim=self.embedding_model.dimension
@@ -128,7 +134,6 @@ class DeepSearch(RAGAgent):
             n_token_route = 0
         consume_tokens += n_token_route
 
-        all_retrieved_results = []
         query_vector = self.embedding_model.embed_query(query)
         for collection in selected_collections:
             log.color_print(f"<search> Search [{query}] in [{collection}]...  </search>\n")
@@ -168,6 +173,46 @@ class DeepSearch(RAGAgent):
                 log.color_print(
                     f"<search> No document chunk accepted from '{collection}'! </search>\n"
                 )
+        
+        # Search from web if enabled
+        if self.enable_web_search:
+            try:
+                log.color_print(f"<search> Web search [{query}]...  </search>\n")
+                from deepsearcher.online_query import web_search_query
+                web_results = web_search_query(query, max_results=3, search_depth="basic")
+                
+                # Apply the same reranking logic to web results
+                accepted_web_num = 0
+                web_references = set()
+                for web_result in web_results:
+                    chat_response = self.llm.chat(
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": RERANK_PROMPT.format(
+                                    query=[query] + sub_queries,
+                                    retrieved_chunk=f"<chunk>{web_result.text}</chunk>",
+                                ),
+                            }
+                        ]
+                    )
+                    consume_tokens += chat_response.total_tokens
+                    response_content = self.llm.remove_think(chat_response.content).strip()
+                    if "YES" in response_content and "NO" not in response_content:
+                        all_retrieved_results.append(web_result)
+                        accepted_web_num += 1
+                        web_references.add(web_result.reference)
+                
+                if accepted_web_num > 0:
+                    log.color_print(
+                        f"<search> Accept {accepted_web_num} web search result(s) from: {list(web_references)} </search>\n"
+                    )
+                else:
+                    log.color_print(f"<search> No web search results accepted </search>\n")
+                    
+            except Exception as e:
+                log.color_print(f"<search> Web search failed: {e} </search>\n")
+        
         return all_retrieved_results, consume_tokens
 
     def _generate_gap_queries(
@@ -232,7 +277,7 @@ class DeepSearch(RAGAgent):
 
             # Create all search tasks
             search_tasks = [
-                self._search_chunks_from_vectordb(query, sub_gap_queries)
+                self._search_chunks(query, sub_gap_queries)
                 for query in sub_gap_queries
             ]
             # Execute all tasks in parallel and wait for results
