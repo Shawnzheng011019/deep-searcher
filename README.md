@@ -205,6 +205,12 @@ result = query("Write a report about xxx.") # Your question here
     <p> You need to install boto3 before running, execute: <code>pip install boto3</code>. More details about Amazon Bedrock: https://docs.aws.amazon.com/bedrock/ </p>
 </details>
 
+<details>
+  <summary>Example (IBM watsonx.ai)</summary>
+    <p> Make sure you have prepared your watsonx.ai credentials as env variables <code>WATSONX_APIKEY</code>, <code>WATSONX_URL</code>, and <code>WATSONX_PROJECT_ID</code>.</p>
+    <pre><code>config.set_provider_config("llm", "watsonx", {"model": "us.deepseek.r1-v1:0"})</code></pre>
+    <p> You need to install ibm-watsonx-ai before running, execute: <code>pip install ibm-watsonx-ai</code>. More details about IBM watsonx.ai: https://www.ibm.com/products/watsonx-ai/foundation-models </p>
+</details>
 
 
 #### Embedding Model Configuration
@@ -308,6 +314,15 @@ result = query("Write a report about xxx.") # Your question here
     <p> You need to install fastembed before running, execute: <code>pip install fastembed</code>. More details about fastembed: https://github.com/qdrant/fastembed </p>
 </details>
 
+
+<details>
+  <summary>Example (IBM watsonx.ai embedding)</summary>
+    <p> Make sure you have prepared your WatsonX credentials as env variables <code>WATSONX_APIKEY</code>, <code>WATSONX_URL</code>, and <code>WATSONX_PROJECT_ID</code>.</p>
+    <pre><code>config.set_provider_config("embedding", "WatsonXEmbedding", {"model": "ibm/slate-125m-english-rtrvr-v2"})</code></pre>
+    <pre><code>config.set_provider_config("embedding", "WatsonXEmbedding", {"model": "sentence-transformers/all-minilm-l6-v2"})</code></pre>
+    <p> You need to install ibm-watsonx-ai before running, execute: <code>pip install ibm-watsonx-ai</code>. More details about IBM watsonx.ai: https://www.ibm.com/products/watsonx-ai/foundation-models </p>
+</details>
+
 #### Vector Database Configuration
 <pre><code>config.set_provider_config("vector_db", "(VectorDBName)", "(Arguments dict)")</code></pre>
 <p>The "VectorDBName" can be one of the following: ["Milvus"] (Under development)</p>
@@ -326,7 +341,8 @@ result = query("Write a report about xxx.") # Your question here
       <li>
           If you have a large-scale dataset, you can set up a more performant Milvus server using 
           <a href="https://milvus.io/docs/quickstart.md" target="_blank">Docker or Kubernetes</a>. 
-          In this setup, use the server URI, e.g., <code>http://localhost:19530</code>, as your <code>uri</code>.
+          In this setup, use the server URI, e.g., <code>http://localhost:19530</code>, as your <code>uri</code>. 
+          You can also use any other connection parameters supported by Milvus such as <code>host</code>, <code>user</code>, <code>password</code>, or <code>secure</code>.
         </li>
     </ul>
     <ul>
@@ -530,6 +546,7 @@ nest_asyncio.apply()
 - [FastEmbed](https://qdrant.github.io/fastembed/)
 - [PPIO](https://ppinfra.com/model-api/product/llm-api?utm_source=github_deep-searcher) (`PPIO_API_KEY` env variable required)
 - [Novita AI](https://novita.ai/docs/api-reference/model-apis-llm-create-embeddings?utm_source=github_deep-searcher&utm_medium=github_readme&utm_campaign=link) (`NOVITA_API_KEY` env variable required)
+- [IBM watsonx.ai](https://www.ibm.com/products/watsonx-ai/foundation-models#ibmembedding) (`WATSONX_APIKEY`, `WATSONX_URL`, `WATSONX_PROJECT_ID` env variables required)
 
 ### 🔹 LLM Support
 - [OpenAI](https://platform.openai.com/docs/models) (`OPENAI_API_KEY` env variable required)
@@ -543,6 +560,7 @@ nest_asyncio.apply()
 - [SambaNova Cloud Inference Service](https://docs.together.ai/docs/introduction) (`SAMBANOVA_API_KEY` env variable required)
 - [Ollama](https://ollama.com/)
 - [Novita AI](https://novita.ai/docs/guides/introduction?utm_source=github_deep-searcher&utm_medium=github_readme&utm_campaign=link) (`NOVITA_API_KEY` env variable required)
+- [IBM watsonx.ai](https://www.ibm.com/products/watsonx-ai/foundation-models#ibmfm) (`WATSONX_APIKEY`, `WATSONX_URL`, `WATSONX_PROJECT_ID` env variable required)
 
 ### 🔹 Document Loader
 - Local File
